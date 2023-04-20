@@ -9,7 +9,7 @@ use capstone_sys::*;
 
 use crate::arch::CapstoneBuilder;
 use crate::constants::{Arch, Endian, ExtraMode, Mode, OptValue, Syntax};
-use crate::error::*;
+use crate::{error::*, LazyInstructions};
 use crate::instruction::{Insn, InsnDetail, InsnGroupId, InsnId, Instructions, RegId};
 
 use {crate::ffi::str_from_cstr_ptr, alloc::string::ToString, libc::c_uint};
@@ -220,6 +220,10 @@ impl Capstone {
         } else {
             Ok(unsafe { Instructions::from_raw_parts(ptr, insn_count) })
         }
+    }
+
+    pub fn disasm_iter<'a, 'b: 'a>(&'a self, code: &'b [u8], addr: u64) -> LazyInstructions<'a> {
+        LazyInstructions::new(self.csh(), code, addr)
     }
 
     /// Returns csh handle

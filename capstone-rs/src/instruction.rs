@@ -28,6 +28,26 @@ use crate::ffi::str_from_cstr_ptr;
 #[derive(Debug)]
 pub struct Instructions<'a>(&'a mut [cs_insn]);
 
+/// Represents a slice of [`Insn`] returned by [`Capstone`](crate::Capstone) `disasm_iter()` methods.
+///
+/// To disasm code to [`Insn`] one by one, use [`.for_each()`](LazyInstructions)
+/// ```
+/// # use capstone::LazyInstructions;
+/// # use capstone::prelude::*;
+/// # let cs = Capstone::new().x86().mode(arch::x86::ArchMode::Mode32).build().unwrap();
+/// let code = b"\x55\x48\x8b\x05";
+/// let lazy_insns: LazyInstructions = cs.disasm_iter(code, 0x1000).unwrap();
+/// lazy_insns.for_each(|insn| {
+///     println!("{}", insn);
+/// })
+/// ```
+pub struct LazyInstructions<'a> {
+    csh: csh,
+    cs_insn: *mut cs_insn,
+    code: &'a [u8],
+    addr: u64,
+}
+
 /// Integer type used in `InsnId`
 pub type InsnIdInt = u32;
 
@@ -132,6 +152,40 @@ impl<'a> Instructions<'a> {
     }
 }
 
+impl<'a> LazyInstructions<'a> {
+    pub(crate) fn new(csh: csh, code: &'a [u8], addr: u64) -> LazyInstructions<'a> {
+        let cs_insn: *mut cs_insn = unsafe { cs_malloc(csh) };
+        Self {
+            csh,
+            cs_insn,
+            code,
+            addr,
+        }
+    }
+
+    pub fn for_each<F>(&self, on_each: F)
+    where
+        F: Fn(&Insn),
+    {
+        let code = self.code;
+        let mut size = self.code.len();
+        let mut addr = self.addr;
+        let cs_inst = self.cs_insn;
+        unsafe {
+            while cs_disasm_iter(
+                self.csh,
+                &mut code.as_ptr(),
+                &mut size,
+                &mut addr,
+                self.cs_insn,
+            ) {
+                let inst = Insn::from_raw(cs_inst);
+                on_each(&inst)
+            }
+        }
+    }
+}
+
 impl<'a> core::ops::Deref for Instructions<'a> {
     type Target = [Insn<'a>];
 
@@ -155,6 +209,14 @@ impl<'a> Drop for Instructions<'a> {
             unsafe {
                 cs_free(self.0.as_mut_ptr(), self.len());
             }
+        }
+    }
+}
+
+impl<'a> Drop for LazyInstructions<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            cs_free(self.cs_insn, 1)
         }
     }
 }
