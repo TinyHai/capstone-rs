@@ -167,18 +167,12 @@ impl<'a> LazyInstructions<'a> {
     where
         F: FnMut(&Insn),
     {
-        let code = self.code;
+        let mut code_ptr = self.code.as_ptr();
         let mut size = self.code.len();
         let mut addr = self.addr;
         let cs_inst = self.cs_insn;
         unsafe {
-            while cs_disasm_iter(
-                self.csh,
-                &mut code.as_ptr(),
-                &mut size,
-                &mut addr,
-                self.cs_insn,
-            ) {
+            while cs_disasm_iter(self.csh, &mut code_ptr, &mut size, &mut addr, self.cs_insn) {
                 let inst = Insn::from_raw(cs_inst);
                 on_each(&inst)
             }
@@ -215,9 +209,7 @@ impl<'a> Drop for Instructions<'a> {
 
 impl<'a> Drop for LazyInstructions<'a> {
     fn drop(&mut self) {
-        unsafe {
-            cs_free(self.cs_insn, 1)
-        }
+        unsafe { cs_free(self.cs_insn, 1) }
     }
 }
 
