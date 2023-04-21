@@ -163,9 +163,9 @@ impl<'a> LazyInstructions<'a> {
         }
     }
 
-    pub fn for_each<F>(&self, on_each: F)
+    pub fn for_each<F>(&self, mut on_each: F)
     where
-        F: Fn(&Insn),
+        F: FnMut(&Insn),
     {
         let code = self.code;
         let mut size = self.code.len();
